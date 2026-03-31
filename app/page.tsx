@@ -7,7 +7,21 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Sparkles, Cat, RefreshCcw, Hand, Search, Lightbulb } from 'lucide-react';
 
-const LEVEL_1_CATS = [
+type CatColor = 'orange' | 'gray' | 'white' | 'black';
+type PanelKey = 'fridge' | 'cabinetLeft' | 'cabinetRight' | 'window' | 'curtain' | 'drawer' | 'rug' | 'plant' | 'chair' | 'clock';
+type RevealTarget = PanelKey | 'none';
+
+type CatData = {
+  id: number;
+  x: number;
+  y: number;
+  scale: number;
+  rotation: number;
+  color: CatColor;
+  revealedBy: RevealTarget;
+};
+
+const LEVEL_1_CATS: CatData[] = [
   { id: 1, x: 10, y: 72, scale: 0.9, rotation: -4, color: 'orange', revealedBy: 'none' },
   { id: 2, x: 17, y: 68, scale: 0.82, rotation: 6, color: 'gray', revealedBy: 'none' },
   { id: 3, x: 80, y: 71, scale: 0.92, rotation: -3, color: 'white', revealedBy: 'none' },
@@ -30,7 +44,7 @@ const LEVEL_1_CATS = [
   { id: 20, x: 35, y: 21, scale: 0.7, rotation: -6, color: 'orange', revealedBy: 'none' },
 ];
 
-const LEVEL_2_CATS = [
+const LEVEL_2_CATS: CatData[] = [
   { id: 1, x: 10, y: 72, scale: 0.9, rotation: -4, color: 'orange', revealedBy: 'none' },
   { id: 2, x: 17, y: 70, scale: 0.82, rotation: 6, color: 'gray', revealedBy: 'none' },
   { id: 3, x: 80, y: 70, scale: 0.92, rotation: -3, color: 'white', revealedBy: 'none' },
@@ -73,8 +87,8 @@ const initialPanels = {
   clock: false,
 };
 
-function CatSprite({ color = 'orange', found = false }) {
-  const palette = {
+function CatSprite({ color = 'orange', found = false }: { color?: CatColor; found?: boolean }) {
+  const palette: Record<CatColor, { fur: string; furDark: string; belly: string; nose: string; eye: string; stripe: string }> = {
     orange: {
       fur: '#d88a43',
       furDark: '#a95f21',
@@ -109,7 +123,7 @@ function CatSprite({ color = 'orange', found = false }) {
     },
   };
 
-  const theme = palette[color] ?? palette.orange;
+  const theme = palette[color];
 
   if (found) {
     return (
@@ -197,7 +211,7 @@ function LivingRoomScene() {
   );
 }
 
-function KitchenScene({ openPanels, toggleObject }) {
+function KitchenScene({ openPanels, toggleObject }: { openPanels: typeof initialPanels; toggleObject: (key: PanelKey) => void }) {
   return (
     <div className="absolute inset-0 overflow-hidden bg-[linear-gradient(180deg,#d8d2cb_0%,#d8d2cb_20%,#cbb8a6_20%,#cbb8a6_44%,#b18f73_44%,#b18f73_80%,#7c553c_80%,#7c553c_100%)]">
       <div className="absolute inset-x-0 top-0 h-[16%] bg-[linear-gradient(180deg,rgba(255,255,255,0.3),transparent)]" />
@@ -305,16 +319,16 @@ function KitchenScene({ openPanels, toggleObject }) {
 }
 
 export default function Find20CatsGame() {
-  const [level, setLevel] = useState(1);
-  const [foundCats, setFoundCats] = useState([]);
+  const [level, setLevel] = useState<1 | 2>(1);
+  const [foundCats, setFoundCats] = useState<number[]>([]);
   const [showNext, setShowNext] = useState(false);
-  const [openPanels, setOpenPanels] = useState(initialPanels);
-  const [hintCatId, setHintCatId] = useState(null);
+  const [openPanels, setOpenPanels] = useState<typeof initialPanels>(initialPanels);
+  const [hintCatId, setHintCatId] = useState<number | null>(null);
   const [timeLeft, setTimeLeft] = useState(60);
   const [gameOver, setGameOver] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [statusMessage, setStatusMessage] = useState('Find all 20 cats before time runs out.');
-  const audioContextRef = useRef(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
 
   const cats = level === 1 ? LEVEL_1_CATS : LEVEL_2_CATS;
   const isHiddenLevel = level === 2;
@@ -326,10 +340,15 @@ export default function Find20CatsGame() {
     [cats, foundCats]
   );
 
-  const playClickSound = (type = 'cat') => {
+  const playClickSound = (type: 'cat' | 'object' | 'success' | 'lose' = 'cat') => {
     if (typeof window === 'undefined') return;
 
-    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    type AudioContextCtor = typeof AudioContext;
+    type WindowWithWebkitAudio = {
+      webkitAudioContext?: AudioContextCtor;
+    };
+
+    const AudioCtx: AudioContextCtor | undefined = window.AudioContext ?? (window as WindowWithWebkitAudio).webkitAudioContext;
     if (!AudioCtx) return;
 
     if (!audioContextRef.current) {
@@ -338,10 +357,17 @@ export default function Find20CatsGame() {
 
     const ctx = audioContextRef.current;
     if (ctx.state === 'suspended') {
-      ctx.resume();
+      void ctx.resume();
     }
 
-    const makeTone = (freqStart, freqEnd, duration, gainPeak = 0.06, typeWave = 'sine', startTime = ctx.currentTime) => {
+    const makeTone = (
+      freqStart: number,
+      freqEnd: number,
+      duration: number,
+      gainPeak = 0.06,
+      typeWave: OscillatorType = 'sine',
+      startTime = ctx.currentTime
+    ) => {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.type = typeWave;
@@ -358,13 +384,11 @@ export default function Find20CatsGame() {
 
     if (type === 'success') {
       const t = ctx.currentTime;
-      // "Tadaaa" style: quick ascending notes + sustained chord
-      const notes = [523, 659, 784, 1047]; // C5, E5, G5, C6
+      const notes = [523, 659, 784, 1047];
       notes.forEach((freq, i) => {
         makeTone(freq * 0.9, freq, 0.18, 0.06, 'triangle', t + i * 0.12);
       });
 
-      // final sustained chord (feels like TADA 🎉)
       notes.forEach((freq) => {
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
@@ -408,7 +432,7 @@ export default function Find20CatsGame() {
     oscillator.stop(ctx.currentTime + 0.13);
   };
 
-  const handleFind = (id) => {
+  const handleFind = (id: number) => {
     if (foundCats.includes(id) || gameEnded) return;
     playClickSound('cat');
     setHintCatId((current) => (current === id ? null : current));
@@ -420,7 +444,7 @@ export default function Find20CatsGame() {
     }
   };
 
-  const toggleObject = (key) => {
+  const toggleObject = (key: PanelKey) => {
     if (gameEnded) return;
     playClickSound('object');
     setStatusMessage(`Opened ${key.replace(/([A-Z])/g, ' $1').toLowerCase()}.`);
@@ -446,7 +470,7 @@ export default function Find20CatsGame() {
     setStatusMessage('Hint used. A cat is highlighted.');
   };
 
-  const startLevel = (nextLevel) => {
+  const startLevel = (nextLevel: 1 | 2) => {
     setLevel(nextLevel);
     setFoundCats([]);
     setShowNext(false);
@@ -461,7 +485,7 @@ export default function Find20CatsGame() {
     startLevel(level);
   };
 
-  const isCatVisible = (cat) => !isHiddenLevel || cat.revealedBy === 'none' || openPanels[cat.revealedBy];
+  const isCatVisible = (cat: CatData) => !isHiddenLevel || cat.revealedBy === 'none' || openPanels[cat.revealedBy];
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
